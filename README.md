@@ -21,17 +21,18 @@ Here are some ideas to get you started:
 -->
 
 
-<div align="center">
+
 
 <b>I'm Front-End Web Developer</b>
 
 - 🌱  I’m currently learning ... <b>Python !</b>
   
   
+  <div align="center">
+  
   [![Tech Blog](http://img.shields.io/badge/-Tech%20blog-black?style=for-the-badge&logo=github&link=https://o-henry.github.io/)](https://o-henry.github.io/)
   [![Portfoilo](http://img.shields.io/badge/-Portfolio-green?style=for-the-badge&link=https://developer-channing.com/)](https://developer-channing.com/)
   [![Gmail Badge](https://img.shields.io/badge/Gmail-d14836?style=for-the-badge&logo=Gmail&logoColor=white&link=mailto:c.henry.9209@gmail.com)](mailto:c.henry.9209@gmail.com)
   
-
-</div>
+  </div>
 
