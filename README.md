@@ -20,7 +20,7 @@ Here are some ideas to get you started:
 - ⚡ Fun fact: ...
 -->
 
-![slide_33](https://user-images.githubusercontent.com/48753593/87267056-a14c6900-c501-11ea-8e8f-0b7f9d29e5df.jpg)
+![slide_33](https://user-images.githubusercontent.com/48753593/87267415-99d98f80-c502-11ea-96b6-c92bac9407bc.jpg)
 
   <div align="center">
   
