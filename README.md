@@ -28,6 +28,8 @@ Here are some ideas to get you started:
 - 🌱  I’m currently learning ... <b>Python !</b>
   
   
+  <br/>
+  
   <div align="center">
   
   [![Tech Blog](http://img.shields.io/badge/-Tech%20blog-black?style=for-the-badge&logo=github&link=https://o-henry.github.io/)](https://o-henry.github.io/)
