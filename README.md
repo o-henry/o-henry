@@ -1,7 +1,7 @@
 
 
   
-## Hi 👋  [![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fo-henry)](https://hits.seeyoufarm.com)
+## Hello 👋 &nbsp; &nbsp; &nbsp; [![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fo-henry)](https://hits.seeyoufarm.com)
   
 
 
@@ -20,7 +20,9 @@ Here are some ideas to get you started:
 - ⚡ Fun fact: ...
 -->
 
-“Most good programmers do programming not because they expect to get paid or get adulation by the public, but because it is fun to program.” 
+ > “Most good programmers do programming not because they expect to get paid or get adulation by the public, <br />
+    &nbsp;  but because it is fun to program.” 
+ 
  > Linus Torvalds
 
   <br/>
