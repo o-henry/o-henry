@@ -22,9 +22,6 @@ Here are some ideas to get you started:
 
 ![slide_33](https://user-images.githubusercontent.com/48753593/87267056-a14c6900-c501-11ea-8e8f-0b7f9d29e5df.jpg)
 
-
-  <br/>
-  
   <div align="center">
   
   [![Tech Blog](http://img.shields.io/badge/-Tech%20blog-black?style=for-the-badge&logo=github&link=https://o-henry.github.io/)](https://o-henry.github.io/)
