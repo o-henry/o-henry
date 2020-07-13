@@ -18,11 +18,11 @@ Here are some ideas to get you started:
 - ⚡ Fun fact: ...
 -->
 
-🏖 I'm Chan Haeng Lee
+I'm Chan Haeng Lee
 
 <br />
+
 * Front-End Web Developer
-* React, Node(Express), HTML5/CSS SCSS, Mongo ...
 
 <div align="center">
   
