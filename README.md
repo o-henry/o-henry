@@ -1,4 +1,7 @@
-### Hi there 👋
+
+## Hi there 👋
+
+---
 
 <!--
 **o-henry/o-henry** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
@@ -18,12 +21,8 @@ Here are some ideas to get you started:
 🏖 I'm Chan Haeng Lee
 
 <br />
-
-✈️ Front-End Web Developer
-
-<br />
-
-🚀 React, Node(Express), HTML5/CSS SCSS, Mongo ...
+* Front-End Web Developer
+* React, Node(Express), HTML5/CSS SCSS, Mongo ...
 
 <div align="center">
   
@@ -33,3 +32,4 @@ Here are some ideas to get you started:
   [![Gmail Badge](https://img.shields.io/badge/Gmail-d14836?style=flat&logo=Gmail&logoColor=white&link=mailto:c.henry.9209@gmail.com)](mailto:c.henry.9209@gmail.com)
   
 </div>
+
