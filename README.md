@@ -20,14 +20,9 @@ Here are some ideas to get you started:
 - ⚡ Fun fact: ...
 -->
 
+“Most good programmers do programming not because they expect to get paid or get adulation by the public, but because it is fun to program.” 
+ > Linus Torvalds
 
-
-
-### I'm Front-End Web Developer
-
-🌱  I’m currently learning ... <b>Python !</b>
-  
-  
   <br/>
   
   <div align="center">
