@@ -23,9 +23,9 @@ Here are some ideas to get you started:
 
 
 
-<b>I'm Front-End Web Developer</b>
+### I'm Front-End Web Developer
 
-- 🌱  I’m currently learning ... <b>Python !</b>
+🌱  I’m currently learning ... <b>Python !</b>
   
   
   <br/>
