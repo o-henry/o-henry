@@ -16,7 +16,12 @@ Here are some ideas to get you started:
 -->
 
 🏖 I'm Chan Haeng Lee
+
+<br />
+
 ✈️ Front-End Web Developer
+
+<br />
 
 🚀 React, Node(Express), HTML5/CSS SCSS, Mongo ...
 
