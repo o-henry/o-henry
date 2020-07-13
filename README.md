@@ -20,7 +20,7 @@ Here are some ideas to get you started:
 - ⚡ Fun fact: ...
 -->
 
- > “Most good programmers do programming not because they expect to get paid or get adulation by the public, <br />
+ “Most good programmers do programming not because they expect to get paid or get adulation by the public, <br />
     &nbsp;  but because it is fun to program.” 
  
  > Linus Torvalds
