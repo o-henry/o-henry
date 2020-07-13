@@ -1,5 +1,6 @@
 
-## Hi there 👋
+## Hi there 👋   [![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fo-henry)](https://hits.seeyoufarm.com)
+
 
 ---
 
@@ -18,18 +19,18 @@ Here are some ideas to get you started:
 - ⚡ Fun fact: ...
 -->
 
-I'm Chan Haeng Lee
 
-<br />
 
-* Front-End Web Developer
+<b>I'm Front-End Web Developer</b>
 
+- 🌱  I’m currently learning ...
+  Python !
+  
 <div align="center">
   
-  [![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fo-henry)](https://hits.seeyoufarm.com)
-  [![Tech Blog](http://img.shields.io/badge/-Tech%20blog-black?style=flat&logo=github&link=https://o-henry.github.io/)](https://o-henry.github.io/)
-  [![Portfoilo](http://img.shields.io/badge/-Portfolio-ff69b4?style=flat&link=https://developer-channing.com/)](https://developer-channing.com/)
-  [![Gmail Badge](https://img.shields.io/badge/Gmail-d14836?style=flat&logo=Gmail&logoColor=white&link=mailto:c.henry.9209@gmail.com)](mailto:c.henry.9209@gmail.com)
+  [![Tech Blog](http://img.shields.io/badge/-Tech%20blog-black?style=for-the-badge&logo=github&link=https://o-henry.github.io/)](https://o-henry.github.io/)
+  [![Portfoilo](http://img.shields.io/badge/-Portfolio-green?style=for-the-badge&link=https://developer-channing.com/)](https://developer-channing.com/)
+  [![Gmail Badge](https://img.shields.io/badge/Gmail-d14836?style=for-the-badge&logo=Gmail&logoColor=white&link=mailto:c.henry.9209@gmail.com)](mailto:c.henry.9209@gmail.com)
   
 </div>
 
