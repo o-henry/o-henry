@@ -1,7 +1,7 @@
 
 
   
-## Hi there 👋 [![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fo-henry)](https://hits.seeyoufarm.com)
+## Hi 👋  [![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fo-henry)](https://hits.seeyoufarm.com)
   
 
 
@@ -24,8 +24,9 @@ Here are some ideas to get you started:
 
 <b>I'm Front-End Web Developer</b>
 
-- 🌱  I’m currently learning ...
-  Python !
+- 🌱  I’m currently learning ... <b>Python !</b>
+  
+  <hr />
   
 <div align="center">
   
