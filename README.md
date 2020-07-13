@@ -18,5 +18,7 @@ Here are some ideas to get you started:
 <div align="center">
   
   [![Hits](https://hits.seeyoufarm.com/api/count/incr/badge.svg?url=https%3A%2F%2Fgithub.com%2Fo-henry)](https://hits.seeyoufarm.com)
+  [![Tech Blog](http://img.shields.io/badge/-Tech%20blog-black??style=for-the-badge&logo=github&link=https://o-henry.github.io/)](https://o-henry.github.io/)
   
+
 </div>
