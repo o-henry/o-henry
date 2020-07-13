@@ -20,15 +20,8 @@ Here are some ideas to get you started:
 - ⚡ Fun fact: ...
 -->
 
+![slide_33](https://user-images.githubusercontent.com/48753593/87267056-a14c6900-c501-11ea-8e8f-0b7f9d29e5df.jpg)
 
-![Quotefancy-760579-3840x2160](https://user-images.githubusercontent.com/48753593/87266712-e2904900-c500-11ea-96af-736bee58dfa9.jpg)
-
-
-
- “Most good programmers do programming not because they expect to get paid or get adulation by the public, <br />
-    &nbsp;  but because it is fun to program.” 
- 
- > Linus Torvalds
 
   <br/>
   
