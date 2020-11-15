@@ -22,6 +22,14 @@ Here are some ideas to get you started:
 
 <!-- ![slide_33](https://user-images.githubusercontent.com/48753593/87267415-99d98f80-c502-11ea-96b6-c92bac9407bc.jpg) -->
 
+<!-- <div align="center"> -->
+
+[![Tech Blog](http://img.shields.io/badge/-Tech%20blog-black?style=for-the-badge&logo=github&link=https://o-henry.github.io/)](https://o-henry.github.io/)
+[![Portfoilo](http://img.shields.io/badge/-Portfolio-blue?style=for-the-badge&link=https://developer-channing.com/)](https://developer-channing.com/)
+[![Gmail Badge](https://img.shields.io/badge/Gmail-72383E?style=for-the-badge&logo=Gmail&logoColor=white&link=mailto:c.henry.9209@gmail.com)](mailto:c.henry.9209@gmail.com)
+
+<!-- </div> -->
+  
 ```py
 
 >>> import this
@@ -51,11 +59,5 @@ Namespaces are one honking great idea -- let's do more of those!
 
 
 
-  <div align="center">
-  
-  [![Tech Blog](http://img.shields.io/badge/-Tech%20blog-black?style=for-the-badge&logo=github&link=https://o-henry.github.io/)](https://o-henry.github.io/)
-  [![Portfoilo](http://img.shields.io/badge/-Portfolio-blue?style=for-the-badge&link=https://developer-channing.com/)](https://developer-channing.com/)
-  [![Gmail Badge](https://img.shields.io/badge/Gmail-72383E?style=for-the-badge&logo=Gmail&logoColor=white&link=mailto:c.henry.9209@gmail.com)](mailto:c.henry.9209@gmail.com)
-  
-  </div>
+
 
