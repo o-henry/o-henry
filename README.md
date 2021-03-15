@@ -22,7 +22,7 @@ Here are some ideas to get you started:
 
 <!-- <div align="center"> -->
 
-[![Tech Blog](http://img.shields.io/badge/-Tech%20blog-black?style=for-the-badge&logo=github&link=https://o-henry.github.io/)](https://o-henry.github.io/)
+[![Blog](http://img.shields.io/badge/-Tech%20blog-black?style=for-the-badge&logo=github&link=https://o-henry.github.io/)](https://o-henry.github.io/)
 [![Portfoilo](http://img.shields.io/badge/-Portfolio-blue?style=for-the-badge&link=https://developer-channing.com/)](https://developer-channing.com/)
 [![Gmail Badge](https://img.shields.io/badge/Gmail-72383E?style=for-the-badge&logo=Gmail&logoColor=white&link=mailto:c.henry.9209@gmail.com)](mailto:c.henry.9209@gmail.com)
 
