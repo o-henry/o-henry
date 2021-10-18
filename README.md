@@ -33,6 +33,6 @@ Here are some ideas to get you started:
  
 <div>
   
-[![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=o-henry&hide=html,css,scss&layout=compact&hide_title=true&border_radisu=5&border_color=#E6FAFA)](https://github.com/anuraghazra/github-readme-stats)
+[![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=o-henry&hide=html,css,scss&layout=compact&hide_title=true&border_radisu=5&langs_count=4)](https://github.com/anuraghazra/github-readme-stats)
 
 </div>
