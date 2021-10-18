@@ -1,7 +1,7 @@
 
 
   
-## Hello 👋 &nbsp; &nbsp; &nbsp; 
+## Hello 🤙 &nbsp; &nbsp; &nbsp; 
 
 <!--
 **o-henry/o-henry** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
@@ -26,9 +26,9 @@ Here are some ideas to get you started:
 [![Gmail Badge](https://img.shields.io/badge/Gmail-72383E?style=for-the-badge&logo=Gmail&logoColor=white&link=mailto:c.henry.9209@gmail.com)](mailto:c.henry.9209@gmail.com)
 
 <!-- </div> -->
+ 
+<div>
   
+[![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=o-henry&hide=html,css,scss&layout=compact)](https://github.com/anuraghazra/github-readme-stats)
 
-
-
-
-
+</div>
