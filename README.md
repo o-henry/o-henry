@@ -33,6 +33,6 @@ Here are some ideas to get you started:
  
 <div>
 
-[![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=o-henry&hide=html,css,scss&layout=compact&hide_title=true&border_radisu=5&exclude_repo=untitled,react-webpack-redux-test,redux-rtk-post,react-test-prac,redux-saga-json,redux-tdd-prac,redux-reference-example,react-compound-prac&langs_count=4)](https://github.com/anuraghazra/github-readme-stats)
+[![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=o-henry&hide=html,css,scss&layout=compact&hide_title=true&border_radisu=5&exclude_repo=untitled,react-webpack-redux-test,redux-rtk-post,react-test-prac,redux-saga-json,redux-tdd-prac,redux-reference-example,react-compound-prac,react-test-app,react-task-tpirates,book-refactoring,react-webpack-basic-prac,portfolio_channing,professional-ts_frontmasters,movie_app,react-css-prac,SSR_Prac,Todo_app,backup_theme,prac_mobx_by_velopert,mapbox_gljs,session-redis,google_map_api,henry_portfolio,react_hooks,react_router_dom,location_service_client,Koa_server,Passport_Prac,Practice,mongoose_RESTful_API,gatsby-aenglee,gatsby-gitbook-aenglee,im14-2019-07-toy-problems,im14-hiring-assessments&langs_count=4)](https://github.com/anuraghazra/github-readme-stats)
 
 </div>
