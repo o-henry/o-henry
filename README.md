@@ -33,6 +33,6 @@ Here are some ideas to get you started:
  
 <div>
 
-[![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=o-henry&hide=html,css,scss&layout=compact&hide_title=true&border_radisu=5&langs_count=4&exclude_repo=untitled,react-webpack-redux-test,redux-rtk-post,react-test-prac,redux-saga-json,redux-tdd-prac,redux-reference-example)](https://github.com/anuraghazra/github-readme-stats)
+[![Top Langs](https://github-readme-stats.vercel.app/api/top-langs/?username=o-henry&hide=html,css,scss&layout=compact&hide_title=true&border_radisu=5&exclude_repo=untitled,react-webpack-redux-test,redux-rtk-post,react-test-prac,redux-saga-json,redux-tdd-prac,redux-reference-example,react-compound-prac&langs_count=4)](https://github.com/anuraghazra/github-readme-stats)
 
 </div>
