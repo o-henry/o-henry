@@ -41,6 +41,6 @@ Here are some ideas to get you started:
   <samp>
     <a href="https://o-henry.github.io">website</a> ·
     <a href="mailto:c.henry.9209@gmail.com">mail</a> ·
-    <a href="https://lee-note.notion.site/82a3ac3053a9457b9f1a4e1b3d7baedc?v=2acb0e3dd5c64d4d8582ee28f193acd7">reads</a>
+<!--     <a href="https://lee-note.notion.site/82a3ac3053a9457b9f1a4e1b3d7baedc?v=2acb0e3dd5c64d4d8582ee28f193acd7">reads</a> -->
   </samp>
 </p>
