@@ -1,0 +1,67 @@
+name: Inspect AI-stock KRX samples v1
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/inspect-ai-stock-samples-v1.yml'
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: python -m pip install requests beautifulsoup4 pandas
+      - name: Download and inspect
+        run: |
+          mkdir -p /tmp/ai_stock_inspect
+          cat > /tmp/ai_stock_inspect/inspect.py <<'PY'
+          from __future__ import annotations
+          import json
+          from pathlib import Path
+          from urllib.parse import urljoin
+          import pandas as pd
+          import requests
+          from bs4 import BeautifulSoup
+
+          BASE='https://www.ai-stock.co.kr/'
+          PAGE=urljoin(BASE,'krx-daily.html')
+          s=requests.Session(); s.headers['User-Agent']='Mozilla/5.0 research-audit/1.0'
+          html=s.get(PAGE,timeout=120).content
+          soup=BeautifulSoup(html,'html.parser')
+          rows=[]
+          for tr in soup.find_all('tr'):
+              cells=[' '.join(td.get_text(' ',strip=True).split()) for td in tr.find_all(['th','td'])]
+              a=tr.find('a',href=lambda x: x and 'fdr_KRX_p1d_' in x)
+              if a:
+                  rows.append({'cells':cells,'url':urljoin(PAGE,a['href'])})
+          out={'page_encoding':soup.original_encoding,'rows_count':len(rows),'sample_rows':rows[:20],'files':{}}
+          wanted=['005930','247540','086520','105560','214450']
+          bycode={r['url'].rsplit('_',1)[-1].split('.')[0]:r for r in rows}
+          for code in wanted:
+              r=bycode.get(code,{'url':urljoin(BASE,f'data/krx_ohlcv/merged/fdr_KRX_p1d_{code}.csv'),'cells':[]})
+              resp=s.get(r['url'],timeout=180)
+              p=Path('/tmp/ai_stock_inspect')/f'{code}.csv'; p.write_bytes(resp.content)
+              info={'url':r['url'],'cells':r['cells'],'status':resp.status_code,'bytes':len(resp.content),'content_type':resp.headers.get('content-type'),'head_raw':resp.content[:500].decode('utf-8','replace')}
+              try:
+                  df=pd.read_csv(p)
+                  info.update({'columns':list(df.columns),'rows':len(df),'head':df.head(3).to_dict('records'),'tail':df.tail(3).to_dict('records'),'dtypes':{c:str(t) for c,t in df.dtypes.items()}})
+              except Exception as e:
+                  info['error']=repr(e)
+              out['files'][code]=info
+          Path('/tmp/ai_stock_inspect/inspect.json').write_text(json.dumps(out,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
+          print('===AI_STOCK_INSPECT_BEGIN===')
+          print(Path('/tmp/ai_stock_inspect/inspect.json').read_text(encoding='utf-8'))
+          print('===AI_STOCK_INSPECT_END===')
+          PY
+          python /tmp/ai_stock_inspect/inspect.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-stock-sample-inspect-v1
+          path: /tmp/ai_stock_inspect
