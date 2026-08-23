@@ -108,7 +108,7 @@ def main() -> None:
     print("candidate rows", len(candidates), "period", candidates["date"].min(), candidates["date"].max())
     print(candidates.groupby(["pattern", "regime"]).size().to_string())
 
-    train_2024 = candidates[candidates["date"] <= pd.Timestamp("2023-12-31")]
+    train_2024 = candidates[candidates["exit_date"] <= pd.Timestamp("2023-12-31")]
     cal_2024 = candidates[candidates["date"].between(pd.Timestamp("2024-01-01"), pd.Timestamp("2024-12-31"))]
     reg24, cls24, columns24, fit24 = fit_models(train_2024)
     scored24 = score_candidates(cal_2024, reg24, cls24, columns24)
@@ -129,33 +129,34 @@ def main() -> None:
     selected_quantile = selected_cfg.edge_quantile
     print("selected threshold config", selected_cfg, "calibration", json.dumps(selected_cal_metrics, ensure_ascii=False))
 
-    train_2025 = candidates[candidates["date"] <= pd.Timestamp("2024-12-31")]
+    train_2025 = candidates[candidates["exit_date"] <= pd.Timestamp("2024-12-31")]
     test_2025 = candidates[candidates["date"].between(pd.Timestamp("2025-01-01"), pd.Timestamp("2025-12-31"))]
     reg25, cls25, columns25, fit25 = fit_models(train_2025)
     scored25 = score_candidates(test_2025, reg25, cls25, columns25)
-    edge25 = float(scored25["edge_score"].quantile(selected_quantile))
+    edge25 = float(selected_edge_2024)
     m25, tr25, eq25 = run_portfolio(scored25, features, bench, pd.Timestamp("2025-01-01"), pd.Timestamp("2025-12-31"), selected_cfg, edge25)
     s25, _, _ = run_portfolio(scored25, features, bench, pd.Timestamp("2025-01-01"), pd.Timestamp("2025-12-31"), selected_cfg, edge25, cost_mult=1.5)
     gates25 = gate_2025(m25, s25)
 
-    train_2026 = candidates[candidates["date"] <= pd.Timestamp("2025-12-31")]
+    train_2026 = candidates[candidates["exit_date"] <= pd.Timestamp("2025-12-31")]
     test_2026 = candidates[candidates["date"].between(pd.Timestamp("2026-01-01"), END_DATE)]
     reg26, cls26, columns26, fit26 = fit_models(train_2026)
     scored26 = score_candidates(test_2026, reg26, cls26, columns26)
-    edge26 = float(scored26["edge_score"].quantile(selected_quantile))
+    edge26 = float(selected_edge_2024)
     m26, tr26, eq26 = run_portfolio(scored26, features, bench, pd.Timestamp("2026-01-01"), END_DATE, selected_cfg, edge26)
     s26, _, _ = run_portfolio(scored26, features, bench, pd.Timestamp("2026-01-01"), END_DATE, selected_cfg, edge26, cost_mult=1.5)
     gates26 = gate_2026(m26, s26)
 
     result = {
-        "version": "krx-v5-long-ohlcv-ml-event-swing",
+        "version": "krx-v5.1-long-ohlcv-ml-event-swing",
         "status": "ACCEPTED" if all(gates25.values()) and all(gates26.values()) else "REJECTED",
         "accepted": bool(all(gates25.values()) and all(gates26.values())),
         "integrity": {
             "model_hyperparameters_fixed": True,
-            "threshold_selected_from": "2024 only",
+            "threshold_selected_from": "2024 only (absolute edge threshold)",
             "2025_used_for_threshold_selection": False,
             "2026_used_for_threshold_selection": False,
+            "training_labels_available_by_cutoff": True,
             "signal_to_fill": "close t -> next open t+1",
             "same_bar_ambiguity": "stop first",
             "integer_shares": True,
@@ -168,6 +169,7 @@ def main() -> None:
         "candidate_counts": {f"{a}|{b}": int(v) for (a, b), v in candidates.groupby(["pattern", "regime"]).size().items()},
         "selected_threshold": asdict(selected_cfg),
         "selected_quantile": selected_quantile,
+        "selected_absolute_edge": selected_edge_2024,
         "calibration_2024": selected_cal_metrics,
         "model_fit": {"for_2024": fit24, "for_2025": fit25, "for_2026": fit26},
         "validation_2025": {"metrics": m25, "cost_stress_1_5x": s25, "gates": gates25, "passed": all(gates25.values())},
