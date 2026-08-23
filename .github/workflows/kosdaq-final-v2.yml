@@ -32,12 +32,14 @@ jobs:
 
       - name: Reconstruct frozen rules and open final once
         run: |
-          mkdir -p /tmp/kosdaq_final_v2
+          mkdir -p /tmp/kosdaq_final_v2 /tmp/korea_regime_v2
           for f in research/korea_regime_v1/parts/run_part_*.txt; do
             cat "$f"
             printf '\n'
           done > /tmp/kosdaq_final_v2/run_v1.py
+          cp /tmp/kosdaq_final_v2/run_v1.py /tmp/korea_regime_v2/run_v1.py
           cp research/korea_regime_v1/v2.py /tmp/kosdaq_final_v2/v2.py
+          cp research/korea_regime_v1/v2.py /tmp/korea_regime_v2/v2.py
           cp research/korea_regime_v1/kosdaq_final_v2.py /tmp/kosdaq_final_v2/final.py
           python -m py_compile /tmp/kosdaq_final_v2/run_v1.py /tmp/kosdaq_final_v2/v2.py /tmp/kosdaq_final_v2/final.py
           python /tmp/kosdaq_final_v2/final.py
