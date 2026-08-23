@@ -20,8 +20,9 @@ jobs:
         run: python -m pip install requests beautifulsoup4 pandas
       - name: Download and inspect
         run: |
-          mkdir -p /tmp/ai_stock_inspect
-          cat > /tmp/ai_stock_inspect/inspect.py <<'PY'
+          rm -rf /tmp/ai_stock_sample_probe
+          mkdir -p /tmp/ai_stock_sample_probe
+          cat > /tmp/ai_stock_sample_probe/probe_samples.py <<'PY'
           from __future__ import annotations
           import json
           from pathlib import Path
@@ -30,6 +31,7 @@ jobs:
           import requests
           from bs4 import BeautifulSoup
 
+          ROOT=Path('/tmp/ai_stock_sample_probe')
           BASE='https://www.ai-stock.co.kr/'
           PAGE=urljoin(BASE,'krx-daily.html')
           s=requests.Session(); s.headers['User-Agent']='Mozilla/5.0 research-audit/1.0'
@@ -47,7 +49,7 @@ jobs:
           for code in wanted:
               r=bycode.get(code,{'url':urljoin(BASE,f'data/krx_ohlcv/merged/fdr_KRX_p1d_{code}.csv'),'cells':[]})
               resp=s.get(r['url'],timeout=180)
-              p=Path('/tmp/ai_stock_inspect')/f'{code}.csv'; p.write_bytes(resp.content)
+              p=ROOT/f'{code}.csv'; p.write_bytes(resp.content)
               info={'url':r['url'],'cells':r['cells'],'status':resp.status_code,'bytes':len(resp.content),'content_type':resp.headers.get('content-type'),'head_raw':resp.content[:500].decode('utf-8','replace')}
               try:
                   df=pd.read_csv(p)
@@ -55,13 +57,14 @@ jobs:
               except Exception as e:
                   info['error']=repr(e)
               out['files'][code]=info
-          Path('/tmp/ai_stock_inspect/inspect.json').write_text(json.dumps(out,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
+          (ROOT/'sample_probe.json').write_text(json.dumps(out,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
           print('===AI_STOCK_INSPECT_BEGIN===')
-          print(Path('/tmp/ai_stock_inspect/inspect.json').read_text(encoding='utf-8'))
+          print((ROOT/'sample_probe.json').read_text(encoding='utf-8'))
           print('===AI_STOCK_INSPECT_END===')
           PY
-          python /tmp/ai_stock_inspect/inspect.py
+          cd /
+          python /tmp/ai_stock_sample_probe/probe_samples.py
       - uses: actions/upload-artifact@v4
         with:
           name: ai-stock-sample-inspect-v1
-          path: /tmp/ai_stock_inspect
+          path: /tmp/ai_stock_sample_probe
