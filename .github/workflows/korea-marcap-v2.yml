@@ -1,12 +1,9 @@
-name: Korea marcap calibrated v2
+name: Korea marcap calibrated v2 clean
 
 on:
   push:
     branches:
-      - research/korea-marcap-v1
-  pull_request:
-    branches:
-      - master
+      - research/korea-marcap-clean
   workflow_dispatch:
 
 permissions:
@@ -46,7 +43,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: korea-marcap-v2-results
+          name: korea-marcap-v2-clean-results
           path: /tmp/korea_marcap_v2/outputs
           if-no-files-found: warn
           retention-days: 30
