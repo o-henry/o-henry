@@ -5,6 +5,7 @@ on:
     branches: [master]
     paths:
       - 'research/korea_regime_v1/v4_fast.py'
+      - 'research/korea_regime_v1/v4_regime_overlay.py'
       - '.github/workflows/korea-regime-v4-fast.yml'
   workflow_dispatch:
 
@@ -28,23 +29,23 @@ jobs:
           python -m pip install pandas numpy yfinance huggingface_hub hf_xet pyarrow
       - name: Reconstruct and run fast v4
         run: |
-          mkdir -p /tmp/korea_regime_v4_fast
+          mkdir -p /tmp/korea_regime_v4
           for f in research/korea_regime_v1/parts/run_part_*.txt; do
             cat "$f"
             printf '\n'
-          done > /tmp/korea_regime_v4_fast/run_v1.py
-          cp research/korea_regime_v1/v4_regime_overlay.py /tmp/korea_regime_v4_fast/v4_regime_overlay.py
-          cp research/korea_regime_v1/v4_fast.py /tmp/korea_regime_v4_fast/fast.py
-          python -m py_compile /tmp/korea_regime_v4_fast/*.py
-          python /tmp/korea_regime_v4_fast/fast.py
+          done > /tmp/korea_regime_v4/run_v1.py
+          cp research/korea_regime_v1/v4_regime_overlay.py /tmp/korea_regime_v4/v4_regime_overlay.py
+          cp research/korea_regime_v1/v4_fast.py /tmp/korea_regime_v4/fast.py
+          python -m py_compile /tmp/korea_regime_v4/*.py
+          python /tmp/korea_regime_v4/fast.py
       - name: Print result
         if: always()
         run: |
-          if [ -f /tmp/korea_regime_v4_fast/outputs/v4_result.json ]; then
-            cat /tmp/korea_regime_v4_fast/outputs/v4_result.json
+          if [ -f /tmp/korea_regime_v4/outputs/v4_result.json ]; then
+            cat /tmp/korea_regime_v4/outputs/v4_result.json
           fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: korea-regime-v4-fast-results
-          path: /tmp/korea_regime_v4_fast/outputs
+          path: /tmp/korea_regime_v4/outputs
