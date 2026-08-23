@@ -30,8 +30,17 @@ def bounded_configs():
 
 
 core.configs = bounded_configs
+_orig_load_data = core.load_data
 _orig_to_parquet = pd.DataFrame.to_parquet
 _orig_apply = pd.DataFrame.apply
+
+
+def liquid_point_in_time_data():
+    df = _orig_load_data()
+    df['mcap_rank_day'] = df.groupby(['Date', 'Market'])['Marcap'].rank(method='first', ascending=False)
+    df['amount_rank_day'] = df.groupby(['Date', 'Market'])['Amount'].rank(method='first', ascending=False)
+    df = df[(df['mcap_rank_day'] <= 550) | (df['amount_rank_day'] <= 250)].copy()
+    return df.drop(columns=['mcap_rank_day', 'amount_rank_day'])
 
 
 def sampled_to_parquet(self, path, *args, **kwargs):
@@ -61,6 +70,7 @@ def fast_apply(self, func, *args, **kwargs):
     return _orig_apply(self, func, *args, **kwargs)
 
 
+core.load_data = liquid_point_in_time_data
 pd.DataFrame.to_parquet = sampled_to_parquet
 pd.DataFrame.apply = fast_apply
 core.main()
