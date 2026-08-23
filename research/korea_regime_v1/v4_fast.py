@@ -4,7 +4,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
-ROOT = Path('/tmp/korea_regime_v4_fast')
+ROOT = Path('/tmp/korea_regime_v4')
 spec = importlib.util.spec_from_file_location('v4base', ROOT / 'v4_regime_overlay.py')
 if spec is None or spec.loader is None:
     raise RuntimeError('unable to import v4 base')
