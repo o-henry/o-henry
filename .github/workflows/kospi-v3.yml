@@ -32,12 +32,14 @@ jobs:
 
       - name: Reconstruct core and run KOSPI v3
         run: |
-          mkdir -p /tmp/kospi_v3
+          mkdir -p /tmp/kospi_v3 /tmp/korea_regime_v2
           for f in research/korea_regime_v1/parts/run_part_*.txt; do
             cat "$f"
             printf '\n'
           done > /tmp/kospi_v3/run_v1.py
+          cp /tmp/kospi_v3/run_v1.py /tmp/korea_regime_v2/run_v1.py
           cp research/korea_regime_v1/v2.py /tmp/kospi_v3/v2.py
+          cp research/korea_regime_v1/v2.py /tmp/korea_regime_v2/v2.py
           cp research/korea_regime_v1/kospi_v3.py /tmp/kospi_v3/kospi_v3.py
           python -m py_compile /tmp/kospi_v3/run_v1.py /tmp/kospi_v3/v2.py /tmp/kospi_v3/kospi_v3.py
           python /tmp/kospi_v3/kospi_v3.py
