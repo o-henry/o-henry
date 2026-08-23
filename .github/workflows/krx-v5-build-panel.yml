@@ -1,0 +1,49 @@
+name: KRX v5 adjusted OHLCV panel build
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/krx-v5-build-panel.yml'
+      - 'research/krx_v5/part1.py'
+  workflow_dispatch:
+
+jobs:
+  build-panel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'numpy<2.3' 'pandas<3' 'scikit-learn<1.8' requests yfinance huggingface_hub hf_xet pyarrow finance-datareader
+      - name: Download, adjust, and package panel
+        run: |
+          rm -rf /tmp/krx_v5_panel
+          mkdir -p /tmp/krx_v5_panel/outputs /tmp/krx_v5_panel/cache
+          cp research/krx_v5/part1.py /tmp/krx_v5_panel/build_panel.py
+          cat >> /tmp/krx_v5_panel/build_panel.py <<'PY'
+
+if __name__ == '__main__':
+    raw, dq = download_panel()
+    panel, aq = adjust_splits(raw)
+    panel.to_parquet('/tmp/krx_v5_panel/outputs/adjusted_panel_2019_2026-08-21.parquet', index=False, compression='zstd')
+    Path('/tmp/krx_v5_panel/outputs/data_quality.json').write_text(
+        json.dumps({'download': dq, 'adjustment': aq}, ensure_ascii=False, indent=2, default=str), encoding='utf-8'
+    )
+    print(json.dumps({'download': dq, 'adjustment': aq, 'parquet_bytes': Path('/tmp/krx_v5_panel/outputs/adjusted_panel_2019_2026-08-21.parquet').stat().st_size}, ensure_ascii=False, indent=2, default=str))
+PY
+          cd /
+          python /tmp/krx_v5_panel/build_panel.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: krx-v5-adjusted-panel
+          path: /tmp/krx_v5_panel/outputs
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 90
