@@ -25,6 +25,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install pandas numpy pyarrow scikit-learn lightgbm
+      - name: Apply bounded fast research patch
+        run: |
+          python research/korea_marcap_v2/patch_fast.py
       - name: Compile
         run: |
           python -m py_compile research/korea_marcap_v1/run.py research/korea_marcap_v2/run_v2.py
