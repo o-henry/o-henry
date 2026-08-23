@@ -1,0 +1,46 @@
+name: KRX v5 long OHLCV ML event swing audit
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/krx-v5-long-ohlcv-ml.yml'
+      - 'research/krx_v5/**'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'numpy<2.3' 'pandas<3' 'scikit-learn<1.8' requests yfinance huggingface_hub hf_xet pyarrow finance-datareader
+      - name: Reconstruct and compile pipeline
+        run: |
+          rm -rf /tmp/krx_v5
+          mkdir -p /tmp/krx_v5/outputs /tmp/krx_v5/cache
+          cat research/krx_v5/part1.py research/krx_v5/part2.py research/krx_v5/part3.py research/krx_v5/part4.py > /tmp/krx_v5/pipeline_v5.py
+          python -m py_compile /tmp/krx_v5/pipeline_v5.py
+      - name: Run point-in-time audit
+        run: python /tmp/krx_v5/pipeline_v5.py
+      - name: Print final result
+        if: always()
+        run: |
+          if [ -f /tmp/krx_v5/outputs/final_result.json ]; then
+            echo '===KRX_V5_RESULT_BEGIN==='
+            cat /tmp/krx_v5/outputs/final_result.json
+            echo '===KRX_V5_RESULT_END==='
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: krx-v5-long-ohlcv-ml-results
+          path: /tmp/krx_v5/outputs
+          if-no-files-found: warn
+          retention-days: 90
