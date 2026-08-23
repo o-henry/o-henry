@@ -18,23 +18,20 @@ SPEC.loader.exec_module(core)
 
 def bounded_configs():
     out = []
-    for hold, topn, score, stop, target, tx, ba, pa, pw in itertools.product(
+    for hold, topn, score, stop, tx in itertools.product(
         [2, 3],
         [1, 2],
         [0.82, 0.88],
         [1.5, 2.0],
-        [3.0, 5.0],
         [0.50, 0.70],
-        [0.15],
-        [0.10],
-        [0.30, 0.50],
     ):
-        out.append(core.Config(hold, topn, score, stop, target, 1.0, 0.80, tx, ba, pa, pw))
+        out.append(core.Config(hold, topn, score, stop, 4.0, 1.0, 0.80, tx, 0.15, 0.10, 0.40))
     return out
 
 
 core.configs = bounded_configs
 _orig_to_parquet = pd.DataFrame.to_parquet
+_orig_apply = pd.DataFrame.apply
 
 
 def sampled_to_parquet(self, path, *args, **kwargs):
@@ -43,5 +40,27 @@ def sampled_to_parquet(self, path, *args, **kwargs):
     return _orig_to_parquet(self, path, *args, **kwargs)
 
 
+def fast_apply(self, func, *args, **kwargs):
+    axis = kwargs.get('axis', args[0] if args else 0)
+    if func is core.regime_filter and axis in (1, 'columns'):
+        r = self['regime'].astype(str)
+        bull = (self['dist_ma60'] > -0.03) & (self['rel20_rank'] >= 0.55) & (self['dd20'] >= -0.18)
+        transition = (self['ret60'] > 0) & (self['rel20_rank'] >= 0.70) & self['dd20'].between(-0.18, -0.01) & (self['close_loc'] >= 0.45)
+        neutral = (self['rel20_rank'] >= 0.65) & (self['dist_ma20'] > -0.05)
+        bear = (self['ret20'] > 0) & (self['rel20_rank'] >= 0.90) & (self['beta20'] <= 0.9) & (self['dist_ma20'] > -0.03)
+        reversal = (self['ret3'] <= -0.08) & (self['close_loc'] >= 0.75) & (self['volume_ratio20'] >= 1.4)
+        leader = (self['ret5'] > 0) & (self['rel5_rank'] >= 0.95) & (self['close_loc'] >= 0.60)
+        panic = reversal | leader
+        return (
+            (r.eq('bull') & bull)
+            | (r.eq('transition') & transition)
+            | (r.eq('neutral') & neutral)
+            | (r.eq('bear') & bear)
+            | (r.eq('panic') & panic)
+        )
+    return _orig_apply(self, func, *args, **kwargs)
+
+
 pd.DataFrame.to_parquet = sampled_to_parquet
+pd.DataFrame.apply = fast_apply
 core.main()
