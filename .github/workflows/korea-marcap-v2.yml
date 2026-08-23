@@ -1,12 +1,6 @@
 name: Korea marcap calibrated v2 clean
 
 on:
-  push:
-    branches:
-      - research/korea-marcap-clean
-  pull_request:
-    branches:
-      - master
   workflow_dispatch:
 
 permissions:
@@ -34,14 +28,6 @@ jobs:
       - name: Run calibrated v2 research
         run: |
           python research/korea_marcap_v2/run_v2.py
-      - name: Print result
-        if: always()
-        run: |
-          if [ -f /tmp/korea_marcap_v2/outputs/result.json ]; then
-            echo '===KOREA_MARCAP_V2_RESULT_BEGIN==='
-            cat /tmp/korea_marcap_v2/outputs/result.json
-            echo '===KOREA_MARCAP_V2_RESULT_END==='
-          fi
       - name: Upload result
         if: always()
         uses: actions/upload-artifact@v4
