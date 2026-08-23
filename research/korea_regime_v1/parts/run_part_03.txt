@@ -1,0 +1,230 @@
+                net_pnl = proceeds - pos.invested - buy_cost
+                trades.append(
+                    {
+                        "market": market,
+                        "config_id": cfg.config_id,
+                        "code": pos.code,
+                        "name": pos.name,
+                        "regime": pos.regime,
+                        "signal_date": str(pos.signal_date.date()),
+                        "entry_date": str(pos.entry_date.date()),
+                        "exit_date": str(date.date()),
+                        "entry_price": pos.entry_price,
+                        "exit_price": px,
+                        "hold_days": pos.age,
+                        "exit_reason": reason,
+                        "gross_return": gross_ret,
+                        "net_pnl": net_pnl,
+                        "net_return_on_position": net_pnl / pos.invested,
+                    }
+                )
+        positions = remaining
+
+        mark_value = 0.0
+        for pos in positions:
+            px = close_map.get((date, pos.code), pos.entry_price)
+            mark_value += pos.shares * px
+        equity = cash + mark_value
+        daily_return = equity / prev_equity - 1.0 if prev_equity > 0 else 0.0
+        prev_equity = equity
+
+        regime = str(day["regime"].dropna().iloc[0]) if day["regime"].notna().any() else "unknown"
+        bench_ret = float(b.loc[b["date"] == date, "bench_daily_return"].iloc[0]) if (b["date"] == date).any() else 0.0
+        equity_rows.append(
+            {
+                "date": date,
+                "market": market,
+                "equity": equity,
+                "daily_return": daily_return,
+                "benchmark_daily_return": bench_ret,
+                "regime": regime,
+                "active_positions": len(positions),
+            }
+        )
+
+        if i + 1 < len(dates):
+            next_date = pd.Timestamp(dates[i + 1])
+            hold, exposure, stop_pct, target_pct = regime_params.get(regime, regime_params["unknown"])
+            if exposure > 0:
+                candidates = candidate_scores(day, cfg).head(cfg.n_select)
+                if not candidates.empty:
+                    cohort_fraction = exposure / max(1, hold)
+                    notional_total = equity * cohort_fraction
+                    each = notional_total / len(candidates)
+                    pending[next_date] = [
+                        {
+                            "code": str(r.code),
+                            "name": str(r.name_ko),
+                            "regime": regime,
+                            "signal_date": date,
+                            "hold_days": hold,
+                            "stop_pct": stop_pct,
+                            "target_pct": target_pct,
+                            "notional": each,
+                        }
+                        for r in candidates.itertuples(index=False)
+                    ]
+
+    last_date = pd.Timestamp(dates[-1])
+    for pos in positions:
+        px = close_map.get((last_date, pos.code), pos.entry_price)
+        proceeds_gross = pos.shares * px
+        sell_cost = proceeds_gross * sell_fee_for_date(last_date, stress)
+        proceeds = proceeds_gross - sell_cost
+        cash += proceeds
+        buy_cost = pos.invested * BUY_FEE * stress
+        net_pnl = proceeds - pos.invested - buy_cost
+        trades.append(
+            {
+                "market": market,
+                "config_id": cfg.config_id,
+                "code": pos.code,
+                "name": pos.name,
+                "regime": pos.regime,
+                "signal_date": str(pos.signal_date.date()),
+                "entry_date": str(pos.entry_date.date()),
+                "exit_date": str(last_date.date()),
+                "entry_price": pos.entry_price,
+                "exit_price": px,
+                "hold_days": pos.age,
+                "exit_reason": "period_end",
+                "gross_return": px / pos.entry_price - 1.0,
+                "net_pnl": net_pnl,
+                "net_return_on_position": net_pnl / pos.invested,
+            }
+        )
+
+    eq = pd.DataFrame(equity_rows)
+    if not eq.empty:
+        eq.loc[eq.index[-1], "equity"] = cash
+        eq["daily_return"] = eq["equity"].pct_change().fillna(0.0)
+
+    tr = pd.DataFrame(trades)
+    metrics = compute_metrics(eq, tr, b, start, end)
+    metrics["config_id"] = cfg.config_id
+    metrics["market"] = market
+    metrics["start"] = str(start.date())
+    metrics["end"] = str(end.date())
+    return metrics, tr, eq
+
+
+def compute_metrics(
+    eq: pd.DataFrame,
+    trades: pd.DataFrame,
+    benchmark: pd.DataFrame,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+) -> dict[str, Any]:
+    if eq.empty:
+        return {
+            "return": 0.0, "profit_factor": 0.0, "max_drawdown": 0.0,
+            "trades": 0, "wins": 0, "monthly_geom": 0.0, "positive_month_ratio": 0.0
+        }
+
+    total_return = float(eq["equity"].iloc[-1] / INITIAL_CAPITAL - 1.0)
+    peak = eq["equity"].cummax()
+    dd = eq["equity"] / peak - 1.0
+    max_dd = float(dd.min())
+
+    if trades.empty:
+        gross_profit = 0.0
+        gross_loss = 0.0
+        wins = 0
+    else:
+        pnl = trades["net_pnl"].astype(float)
+        gross_profit = float(pnl[pnl > 0].sum())
+        gross_loss = float(-pnl[pnl < 0].sum())
+        wins = int((pnl > 0).sum())
+    pf = gross_profit / gross_loss if gross_loss > 0 else (999.0 if gross_profit > 0 else 0.0)
+
+    eq2 = eq.copy()
+    eq2["month"] = eq2["date"].dt.to_period("M")
+    monthly = eq2.groupby("month")["daily_return"].apply(lambda x: float((1.0 + x).prod() - 1.0))
+    monthly_geom = float((1.0 + monthly).prod() ** (1.0 / len(monthly)) - 1.0) if len(monthly) else 0.0
+    positive_month_ratio = float((monthly > 0).mean()) if len(monthly) else 0.0
+
+    bench = benchmark[benchmark["date"].between(start, end)].copy()
+    benchmark_return = (
+        float(bench["bench_close"].iloc[-1] / bench["bench_close"].iloc[0] - 1.0)
+        if len(bench) >= 2 else 0.0
+    )
+    benchmark_regret = max(0.0, benchmark_return - total_return)
+    opportunity_adjusted = total_return - 0.5 * benchmark_regret
+
+    daily = eq["daily_return"].astype(float)
+    bench_daily = eq["benchmark_daily_return"].astype(float)
+    beta = float(daily.cov(bench_daily) / bench_daily.var()) if bench_daily.var() > 0 else 0.0
+    alpha_sum = float((daily - beta * bench_daily).sum())
+
+    regime_metrics: dict[str, Any] = {}
+    for regime in ["bull", "transition", "neutral", "bear", "panic"]:
+        sub_eq = eq[eq["regime"] == regime]
+        sub_tr = trades[trades["regime"] == regime] if not trades.empty else pd.DataFrame()
+        if sub_eq.empty:
+            regime_metrics[regime] = {
+                "days": 0, "strategy_return": 0.0, "benchmark_return": 0.0,
+                "trade_pnl": 0.0, "trades": 0, "pf": 0.0
+            }
+            continue
+        sret = float((1.0 + sub_eq["daily_return"]).prod() - 1.0)
+        bret = float((1.0 + sub_eq["benchmark_daily_return"]).prod() - 1.0)
+        if sub_tr.empty:
+            rp = 0.0
+            rpf = 0.0
+            rtn = 0
+        else:
+            p = sub_tr["net_pnl"].astype(float)
+            gp = float(p[p > 0].sum())
+            gl = float(-p[p < 0].sum())
+            rpf = gp / gl if gl > 0 else (999.0 if gp > 0 else 0.0)
+            rp = float(p.sum())
+            rtn = int(len(p))
+        regime_metrics[regime] = {
+            "days": int(len(sub_eq)),
+            "strategy_return": sret,
+            "benchmark_return": bret,
+            "excess_return": sret - bret,
+            "trade_pnl": rp,
+            "trades": rtn,
+            "pf": rpf,
+        }
+
+    return {
+        "return": total_return,
+        "final_equity": float(eq["equity"].iloc[-1]),
+        "net_profit": float(eq["equity"].iloc[-1] - INITIAL_CAPITAL),
+        "profit_factor": float(pf),
+        "max_drawdown": max_dd,
+        "trades": int(len(trades)),
+        "wins": wins,
+        "win_rate": float(wins / len(trades)) if len(trades) else 0.0,
+        "monthly_geom": monthly_geom,
+        "monthly_median": float(monthly.median()) if len(monthly) else 0.0,
+        "positive_month_ratio": positive_month_ratio,
+        "benchmark_return": benchmark_return,
+        "opportunity_adjusted": opportunity_adjusted,
+        "beta": beta,
+        "alpha_sum": alpha_sum,
+        "regimes": regime_metrics,
+        "monthly_returns": {str(k): float(v) for k, v in monthly.items()},
+    }
+
+
+def objective(m: dict[str, Any]) -> float:
+    reg = m["regimes"]
+    bear_like = reg["bear"]["strategy_return"] + reg["panic"]["strategy_return"]
+    transition = reg["transition"]["strategy_return"] + reg["neutral"]["strategy_return"]
+    penalty = 0.0
+    if bear_like < 0:
+        penalty += abs(bear_like) * 3.0
+    if transition < 0:
+        penalty += abs(transition) * 2.0
+    if m["max_drawdown"] < -0.15:
+        penalty += abs(m["max_drawdown"] + 0.15) * 3.0
+    if m["trades"] < 12:
+        penalty += 0.15
+    return (
+        m["return"]
+        + 0.6 * m["monthly_geom"]
+        + 0.4 * m["opportunity_adjusted"]
+        + 0.3 * max(0.0, bear_like)

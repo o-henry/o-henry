@@ -1,0 +1,61 @@
+name: KOSPI regime v3 explicit beta alpha
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "research/korea_regime_v1/**"
+      - ".github/workflows/kospi-v3.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy yfinance huggingface_hub hf_xet pyarrow
+
+      - name: Reconstruct core and run KOSPI v3
+        run: |
+          mkdir -p /tmp/kospi_v3 /tmp/korea_regime_v2
+          for f in research/korea_regime_v1/parts/run_part_*.txt; do
+            cat "$f"
+            printf '\n'
+          done > /tmp/kospi_v3/run_v1.py
+          cp /tmp/kospi_v3/run_v1.py /tmp/korea_regime_v2/run_v1.py
+          cp research/korea_regime_v1/v2.py /tmp/kospi_v3/v2.py
+          cp research/korea_regime_v1/v2.py /tmp/korea_regime_v2/v2.py
+          cp research/korea_regime_v1/kospi_v3.py /tmp/kospi_v3/kospi_v3.py
+          python -m py_compile /tmp/kospi_v3/run_v1.py /tmp/kospi_v3/v2.py /tmp/kospi_v3/kospi_v3.py
+          python /tmp/kospi_v3/kospi_v3.py
+
+      - name: Print result
+        if: always()
+        run: |
+          if [ -f /tmp/kospi_v3/outputs/kospi_v3_result.json ]; then
+            echo '===KOSPI_V3_RESULT_BEGIN==='
+            cat /tmp/kospi_v3/outputs/kospi_v3_result.json
+            echo '===KOSPI_V3_RESULT_END==='
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kospi-regime-v3-results
+          path: /tmp/kospi_v3/outputs
+          if-no-files-found: warn

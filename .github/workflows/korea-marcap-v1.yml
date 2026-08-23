@@ -1,0 +1,49 @@
+name: Korea marcap point-in-time v1
+
+on:
+  push:
+    branches:
+      - research/korea-marcap-v1
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy pyarrow scikit-learn lightgbm
+      - name: Compile
+        run: |
+          python -m py_compile research/korea_marcap_v1/run.py research/korea_marcap_v1/runner.py
+      - name: Run research
+        run: |
+          python research/korea_marcap_v1/runner.py
+      - name: Print result
+        if: always()
+        run: |
+          if [ -f /tmp/korea_marcap_v1/outputs/result.json ]; then
+            echo '===KOREA_MARCAP_V1_RESULT_BEGIN==='
+            cat /tmp/korea_marcap_v1/outputs/result.json
+            echo '===KOREA_MARCAP_V1_RESULT_END==='
+          fi
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: korea-marcap-v1-results
+          path: /tmp/korea_marcap_v1/outputs
+          if-no-files-found: warn
+          retention-days: 30

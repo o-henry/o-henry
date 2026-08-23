@@ -1,0 +1,179 @@
+        + 0.2 * max(0.0, transition)
+        + 0.03 * min(m["profit_factor"], 3.0)
+        - penalty
+    )
+
+
+def validation_gate(m: dict[str, Any], stress_m: dict[str, Any]) -> dict[str, bool]:
+    reg = m["regimes"]
+    bear_days = reg["bear"]["days"] + reg["panic"]["days"]
+    transition_days = reg["transition"]["days"] + reg["neutral"]["days"]
+    bear_return = reg["bear"]["strategy_return"] + reg["panic"]["strategy_return"]
+    transition_return = reg["transition"]["strategy_return"] + reg["neutral"]["strategy_return"]
+    return {
+        "return_positive": m["return"] > 0,
+        "monthly_geom_3pct": m["monthly_geom"] >= 0.03,
+        "profit_factor": m["profit_factor"] >= 1.15,
+        "max_drawdown": m["max_drawdown"] >= -0.15,
+        "opportunity_adjusted": m["opportunity_adjusted"] > 0,
+        "trades": m["trades"] >= 10,
+        "cost_stress": stress_m["return"] > 0,
+        "bear_defense": (bear_days < 10) or (bear_return >= 0),
+        "transition_positive": (transition_days < 10) or (transition_return > 0),
+        "beta_not_pure_market": m["beta"] <= 1.20,
+    }
+
+
+def final_gate(m: dict[str, Any], stress_m: dict[str, Any]) -> dict[str, bool]:
+    g = validation_gate(m, stress_m)
+    g.update({
+        "monthly_geom_5pct": m["monthly_geom"] >= 0.05,
+        "positive_month_ratio": m["positive_month_ratio"] >= 0.60,
+    })
+    return g
+
+
+def build_configs() -> list[Config]:
+    configs = []
+    for values in itertools.product(
+        [2, 3],
+        [1, 2],
+        [1, 2],
+        [1, 2],
+        [0.80, 1.00],
+        [0.45, 0.65],
+        [0.20, 0.35],
+        [1.5, 2.0],
+        [False, True],
+    ):
+        configs.append(Config(*values))
+    return configs
+
+
+def main() -> None:
+    print("Loading Korean point-in-time daily dataset")
+    prices = load_prices()
+    print("rows", len(prices), "range", prices["date"].min(), prices["date"].max())
+    benchmarks = load_benchmarks(prices["date"].min(), prices["date"].max(), prices)
+    features, bench_features = build_features(prices, benchmarks)
+    configs = build_configs()
+    print("configs", len(configs))
+
+    output: dict[str, Any] = {
+        "version": "korea-regime-v1",
+        "data": {
+            "source": DATASET_REPO,
+            "rows": int(len(prices)),
+            "min_date": str(prices["date"].min().date()),
+            "max_date": str(prices["date"].max().date()),
+            "limitations": [
+                "250 trading days only",
+                "close and volume only; next-close execution",
+                "unadjusted for splits/dividends",
+                "current-covered universe implies survivorship bias",
+                "no complete historical news archive",
+            ],
+        },
+        "periods": {
+            "development": [str(DEV_START.date()), str(DEV_END.date())],
+            "validation": [str(VALID_START.date()), str(VALID_END.date())],
+            "final_locked": [str(FINAL_START.date()), str(FINAL_END.date())],
+        },
+        "markets": {},
+    }
+
+    selected: dict[str, Config] = {}
+
+    for market in ["KOSPI", "KOSDAQ"]:
+        print("DEVELOPMENT", market)
+        dev_rows = []
+        for idx, cfg in enumerate(configs):
+            m, _, _ = simulate_market(
+                market, cfg, features, bench_features, DEV_START, DEV_END
+            )
+            m["objective"] = objective(m)
+            dev_rows.append(m)
+            if (idx + 1) % 64 == 0:
+                print(market, "dev", idx + 1, "/", len(configs))
+        dev_df = pd.DataFrame([
+            {k: v for k, v in row.items() if k not in {"regimes", "monthly_returns"}}
+            for row in dev_rows
+        ]).sort_values("objective", ascending=False)
+        dev_df.to_csv(OUT / f"{market.lower()}_development_candidates.csv", index=False)
+
+        top_ids = dev_df.head(24)["config_id"].tolist()
+        cfg_by_id = {c.config_id: c for c in configs}
+        print("VALIDATION", market, len(top_ids))
+        valid_rows = []
+        for cid in top_ids:
+            cfg = cfg_by_id[cid]
+            m, _, _ = simulate_market(
+                market, cfg, features, bench_features, VALID_START, VALID_END
+            )
+            stress_m, _, _ = simulate_market(
+                market, cfg, features, bench_features, VALID_START, VALID_END, stress=STRESS_MULT
+            )
+            gate = validation_gate(m, stress_m)
+            valid_rows.append({
+                "config_id": cid,
+                "metrics": m,
+                "stress": stress_m,
+                "gate": gate,
+                "passed": all(gate.values()),
+                "score": objective(m),
+            })
+
+        passing = [r for r in valid_rows if r["passed"]]
+        chosen = max(passing, key=lambda r: r["score"]) if passing else max(valid_rows, key=lambda r: r["score"])
+        chosen_cfg = cfg_by_id[chosen["config_id"]]
+        selected[market] = chosen_cfg
+        output["markets"][market] = {
+            "selected_config": asdict(chosen_cfg),
+            "selected_config_id": chosen_cfg.config_id,
+            "development_top5": dev_df.head(5).to_dict(orient="records"),
+            "validation": chosen,
+            "validation_passed": bool(chosen["passed"]),
+        }
+
+    research_gate_passed = all(
+        output["markets"][m]["validation_passed"] for m in ["KOSPI", "KOSDAQ"]
+    )
+    output["research_gate_passed"] = research_gate_passed
+    output["final_locked_opened"] = research_gate_passed
+
+    if research_gate_passed:
+        for market in ["KOSPI", "KOSDAQ"]:
+            cfg = selected[market]
+            m, tr, eq = simulate_market(
+                market, cfg, features, bench_features, FINAL_START, FINAL_END
+            )
+            stress_m, _, _ = simulate_market(
+                market, cfg, features, bench_features, FINAL_START, FINAL_END, stress=STRESS_MULT
+            )
+            gate = final_gate(m, stress_m)
+            output["markets"][market]["final"] = {
+                "metrics": m,
+                "stress": stress_m,
+                "gate": gate,
+                "passed": all(gate.values()),
+            }
+            tr.to_csv(OUT / f"{market.lower()}_final_trades.csv", index=False)
+            eq.to_csv(OUT / f"{market.lower()}_final_equity.csv", index=False)
+
+        output["accepted"] = all(
+            output["markets"][m]["final"]["passed"] for m in ["KOSPI", "KOSDAQ"]
+        )
+    else:
+        output["accepted"] = False
+
+    (OUT / "final_result.json").write_text(
+        json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    print("===KOREA_REGIME_V1_RESULT_BEGIN===")
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    print("===KOREA_REGIME_V1_RESULT_END===")
+
+
+if __name__ == "__main__":
+    main()
