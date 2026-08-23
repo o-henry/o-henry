@@ -1,0 +1,230 @@
+from __future__ import annotations
+
+import itertools
+import json
+import math
+import os
+import warnings
+from dataclasses import asdict, dataclass, replace
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+import yfinance as yf
+from huggingface_hub import hf_hub_download
+
+warnings.filterwarnings("ignore")
+
+ROOT = Path(__file__).resolve().parent
+OUT = ROOT / "outputs"
+OUT.mkdir(parents=True, exist_ok=True)
+
+DATASET_REPO = "aikstockdata/korea-equity-daily-2026-08"
+DATA_FILE = "daily_prices.csv"
+
+DEV_START = pd.Timestamp("2025-07-25")
+DEV_END = pd.Timestamp("2025-12-31")
+VALID_START = pd.Timestamp("2026-01-01")
+VALID_END = pd.Timestamp("2026-04-30")
+FINAL_START = pd.Timestamp("2026-05-01")
+FINAL_END = pd.Timestamp("2026-08-04")
+
+INITIAL_CAPITAL = 2_000_000.0
+BUY_FEE = 0.0005
+SELL_FEE_2025 = 0.0020
+SELL_FEE_2026 = 0.0025
+STRESS_MULT = 1.5
+
+INDEX_SYMBOL = {"KOSPI": "^KS11", "KOSDAQ": "^KQ11"}
+
+
+@dataclass(frozen=True)
+class Config:
+    bull_hold: int
+    transition_hold: int
+    bear_hold: int
+    n_select: int
+    bull_exposure: float
+    transition_exposure: float
+    bear_exposure: float
+    overheat_sigma: float
+    include_panic_reversal: bool
+
+    @property
+    def config_id(self) -> str:
+        return (
+            f"bh{self.bull_hold}-th{self.transition_hold}-eh{self.bear_hold}"
+            f"-n{self.n_select}-bx{self.bull_exposure:.2f}"
+            f"-tx{self.transition_exposure:.2f}-ex{self.bear_exposure:.2f}"
+            f"-oh{self.overheat_sigma:.1f}-pr{int(self.include_panic_reversal)}"
+        )
+
+
+def load_prices() -> pd.DataFrame:
+    local = hf_hub_download(
+        repo_id=DATASET_REPO,
+        filename=DATA_FILE,
+        repo_type="dataset",
+    )
+    df = pd.read_csv(local, dtype={"code": str, "date": str})
+    df["code"] = df["code"].str.zfill(6)
+    df["date"] = pd.to_datetime(df["date"], format="%Y%m%d")
+    df["close"] = pd.to_numeric(df["close_krw"], errors="coerce")
+    df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+    df = df[["code", "name_ko", "market", "date", "close", "volume"]]
+    df = df.dropna(subset=["close", "volume"])
+    df = df[(df["close"] > 0) & (df["volume"] >= 0)]
+    df = df.sort_values(["market", "code", "date"]).reset_index(drop=True)
+    return df
+
+
+def load_benchmarks(start: pd.Timestamp, end: pd.Timestamp, prices: pd.DataFrame) -> pd.DataFrame:
+    records: list[pd.DataFrame] = []
+    for market, symbol in INDEX_SYMBOL.items():
+        try:
+            raw = yf.download(
+                symbol,
+                start=(start - pd.Timedelta(days=120)).strftime("%Y-%m-%d"),
+                end=(end + pd.Timedelta(days=7)).strftime("%Y-%m-%d"),
+                auto_adjust=False,
+                progress=False,
+                threads=False,
+                timeout=60,
+            )
+            if isinstance(raw.columns, pd.MultiIndex):
+                raw.columns = raw.columns.get_level_values(0)
+            close = raw["Close"].dropna().rename("bench_close").to_frame()
+            close.index = pd.to_datetime(close.index).tz_localize(None)
+            close["market"] = market
+            close["date"] = close.index
+            records.append(close.reset_index(drop=True))
+        except Exception as exc:
+            print(f"benchmark download failed {market}: {exc!r}")
+
+    if len(records) == 2:
+        out = pd.concat(records, ignore_index=True)
+        if out.groupby("market").size().min() >= 150:
+            return out[["market", "date", "bench_close"]]
+
+    print("Using equal-weight market fallback")
+    p = prices.copy()
+    p["ret1_tmp"] = p.groupby(["market", "code"])["close"].pct_change()
+    eq = (
+        p.groupby(["market", "date"], as_index=False)["ret1_tmp"]
+        .mean()
+        .sort_values(["market", "date"])
+    )
+    eq["bench_close"] = eq.groupby("market")["ret1_tmp"].transform(
+        lambda x: (1.0 + x.fillna(0.0)).cumprod() * 1000.0
+    )
+    return eq[["market", "date", "bench_close"]]
+
+
+def rolling_beta(stock_ret: pd.Series, bench_ret: pd.Series, window: int = 20) -> pd.Series:
+    cov = stock_ret.rolling(window, min_periods=window).cov(bench_ret)
+    var = bench_ret.rolling(window, min_periods=window).var()
+    return cov / var.replace(0.0, np.nan)
+
+
+def build_features(prices: pd.DataFrame, benchmarks: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    b = benchmarks.sort_values(["market", "date"]).copy()
+    bg = b.groupby("market", group_keys=False)
+    b["bench_ret1"] = bg["bench_close"].pct_change()
+    for n in [5, 20, 60]:
+        b[f"bench_ret{n}"] = bg["bench_close"].pct_change(n)
+    b["bench_ma20"] = bg["bench_close"].transform(lambda s: s.rolling(20, min_periods=20).mean())
+    b["bench_ma60"] = bg["bench_close"].transform(lambda s: s.rolling(60, min_periods=60).mean())
+    b["bench_vol20"] = bg["bench_ret1"].transform(lambda s: s.rolling(20, min_periods=20).std())
+    b["bench_slope20"] = bg["bench_ma20"].pct_change(5)
+
+    p = prices.merge(b[["market", "date", "bench_close", "bench_ret1"]], on=["market", "date"], how="left")
+    p = p.sort_values(["market", "code", "date"]).copy()
+    g = p.groupby(["market", "code"], group_keys=False)
+
+    p["ret1"] = g["close"].pct_change()
+    for n in [3, 5, 10, 20, 60, 120]:
+        p[f"ret{n}"] = g["close"].pct_change(n)
+    p["ma10"] = g["close"].transform(lambda s: s.rolling(10, min_periods=10).mean())
+    p["ma20"] = g["close"].transform(lambda s: s.rolling(20, min_periods=20).mean())
+    p["ma60"] = g["close"].transform(lambda s: s.rolling(60, min_periods=60).mean())
+    p["high20"] = g["close"].transform(lambda s: s.rolling(20, min_periods=20).max())
+    p["high60"] = g["close"].transform(lambda s: s.rolling(60, min_periods=60).max())
+    p["vol20"] = g["ret1"].transform(lambda s: s.rolling(20, min_periods=20).std())
+    p["vol60"] = g["ret1"].transform(lambda s: s.rolling(60, min_periods=60).std())
+    p["avgvol20"] = g["volume"].transform(lambda s: s.rolling(20, min_periods=20).mean())
+    p["volume_ratio"] = p["volume"] / p["avgvol20"].replace(0.0, np.nan)
+    p["turnover"] = p["close"] * p["volume"]
+    p["adv20"] = g["turnover"].transform(lambda s: s.rolling(20, min_periods=20).mean())
+    p["drawdown20"] = p["close"] / p["high20"] - 1.0
+    p["drawdown60"] = p["close"] / p["high60"] - 1.0
+    p["dist_ma20_sigma"] = (p["close"] / p["ma20"] - 1.0) / p["vol20"].replace(0.0, np.nan)
+    p["rel1"] = p["ret1"] - p["bench_ret1"]
+
+    beta_series = p.groupby(["market", "code"], group_keys=False).apply(
+        lambda x: rolling_beta(x["ret1"], x["bench_ret1"], 20),
+        include_groups=False,
+    )
+    p["beta20"] = beta_series.reindex(p.index)
+
+    p["max_abs_ret20"] = g["ret1"].transform(lambda s: s.abs().rolling(20, min_periods=20).max())
+    p["history_n"] = g.cumcount() + 1
+
+    p = p.drop(columns=["bench_close", "bench_ret1"]).merge(b, on=["market", "date"], how="left")
+
+    for n in [5, 20, 60]:
+        p[f"rel{n}"] = p[f"ret{n}"] - p[f"bench_ret{n}"]
+
+    def pct_rank(s: pd.Series) -> pd.Series:
+        return s.rank(pct=True, method="average")
+
+    rank_cols = ["ret5", "ret20", "ret60", "rel5", "rel20", "rel60", "volume_ratio", "adv20", "vol20"]
+    for c in rank_cols:
+        p[f"rank_{c}"] = p.groupby(["market", "date"])[c].transform(pct_rank)
+    p["rank_low_vol20"] = 1.0 - p["rank_vol20"]
+
+    liq_for_breadth = (
+        (p["history_n"] >= 60)
+        & (p["adv20"] >= 500_000_000)
+        & (p["close"] >= 1000)
+        & (p["max_abs_ret20"] <= 0.35)
+    )
+    breadth = (
+        p[liq_for_breadth]
+        .assign(above20=lambda x: (x["close"] > x["ma20"]).astype(float))
+        .groupby(["market", "date"], as_index=False)["above20"]
+        .mean()
+        .rename(columns={"above20": "breadth20"})
+    )
+    p = p.merge(breadth, on=["market", "date"], how="left")
+    b = b.merge(breadth, on=["market", "date"], how="left")
+
+    def regime_row(row: pd.Series) -> str:
+        if pd.isna(row["bench_ma60"]) or pd.isna(row["breadth20"]):
+            return "unknown"
+        panic = (row["bench_ret5"] <= -0.06) or (
+            row["bench_vol20"] >= 0.025 and row["bench_ret20"] < 0
+        )
+        bull = (
+            row["bench_close"] > row["bench_ma20"] > row["bench_ma60"]
+            and row["bench_ret20"] > 0.02
+            and row["breadth20"] >= 0.55
+        )
+        bear = (
+            row["bench_close"] < row["bench_ma60"]
+            and row["bench_ret20"] < -0.02
+            and row["breadth20"] <= 0.42
+        )
+        transition = (
+            abs(row["bench_close"] / row["bench_ma20"] - 1.0) <= 0.025
+            or abs(row["bench_slope20"]) <= 0.01
+            or 0.42 < row["breadth20"] < 0.55
+        )
+        if panic:
+            return "panic"
+        if bull:
+            return "bull"
+        if bear:
+            return "bear"
+        if transition:
+            return "transition"

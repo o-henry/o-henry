@@ -1,0 +1,64 @@
+name: Korea regime v3 fixed Jan-Aug research
+
+on:
+  push:
+    branches:
+      - research/korea-regime-v1-run
+    paths:
+      - "research/korea_regime_v1/v3.py"
+      - "research/korea_regime_v1/parts/**"
+      - ".github/workflows/korea-regime-v3-public.yml"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "research/korea_regime_v1/v3.py"
+      - "research/korea_regime_v1/parts/**"
+      - ".github/workflows/korea-regime-v3-public.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy yfinance huggingface_hub hf_xet pyarrow pykrx
+
+      - name: Reconstruct core and run fixed v3
+        run: |
+          for f in research/korea_regime_v1/parts/run_part_*.txt; do
+            cat "$f"
+            printf '\n'
+          done > research/korea_regime_v1/run_v1.py
+          python -m py_compile research/korea_regime_v1/run_v1.py research/korea_regime_v1/v3.py
+          python research/korea_regime_v1/v3.py
+
+      - name: Print result
+        if: always()
+        run: |
+          if [ -f research/korea_regime_v1/outputs_v3/final_result.json ]; then
+            echo '===KOREA_REGIME_V3_RESULT_BEGIN==='
+            cat research/korea_regime_v1/outputs_v3/final_result.json
+            echo '===KOREA_REGIME_V3_RESULT_END==='
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: korea-regime-v3-results
+          path: research/korea_regime_v1/outputs_v3
+          if-no-files-found: warn

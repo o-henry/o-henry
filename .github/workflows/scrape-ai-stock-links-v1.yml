@@ -1,0 +1,79 @@
+name: Discover AI-stock KRX bulk links v1
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/scrape-ai-stock-links-v1.yml'
+      - 'research/ai_stock_discovery/**'
+  workflow_dispatch:
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: python -m pip install requests beautifulsoup4
+      - name: Scrape download links
+        run: |
+          mkdir -p /tmp/ai_stock_discovery
+          cat > /tmp/ai_stock_discovery/discover.py <<'PY'
+          from __future__ import annotations
+          import json, re
+          from pathlib import Path
+          from urllib.parse import urljoin
+          import requests
+          from bs4 import BeautifulSoup
+
+          URLS = [
+              'https://www.ai-stock.co.kr/downloads.html',
+              'https://www.ai-stock.co.kr/krx-daily.html',
+              'https://www.ai-stock.co.kr/krx-ohlcv.html',
+          ]
+          session = requests.Session()
+          session.headers['User-Agent'] = 'Mozilla/5.0 research-audit/1.0'
+          out = {'pages': {}}
+          for url in URLS:
+              r = session.get(url, timeout=120)
+              text = r.text
+              soup = BeautifulSoup(text, 'html.parser')
+              links = []
+              for a in soup.find_all('a'):
+                  href = a.get('href')
+                  if not href:
+                      continue
+                  full = urljoin(url, href)
+                  label = ' '.join(a.get_text(' ', strip=True).split())
+                  links.append({'href': href, 'url': full, 'label': label})
+              assets = sorted(set(re.findall(r'''https?://[^\s"'<>]+|(?:[A-Za-z0-9_./-]+\.(?:zip|csv|parquet|xlsx|xls|json)(?:\?[^\s"'<>]*)?)''', text, flags=re.I)))
+              interesting = [x for x in links if any(k in (x['href']+' '+x['label']).lower() for k in ['download','zip','csv','parquet','xlsx','ohlcv','daily','data'])]
+              scripts = []
+              for s in soup.find_all('script'):
+                  src = s.get('src')
+                  if src:
+                      scripts.append(urljoin(url, src))
+              out['pages'][url] = {
+                  'status': r.status_code,
+                  'length': len(text),
+                  'title': soup.title.get_text(strip=True) if soup.title else '',
+                  'interesting_links': interesting,
+                  'all_asset_like_strings': assets[:2000],
+                  'scripts': scripts,
+                  'download_contexts': [text[max(0,m.start()-250):min(len(text),m.end()+500)] for m in list(re.finditer('download', text, flags=re.I))[:50]],
+              }
+          p = Path('/tmp/ai_stock_discovery/discovery.json')
+          p.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding='utf-8')
+          print('===DISCOVERY_BEGIN===')
+          print(p.read_text(encoding='utf-8')[:120000])
+          print('===DISCOVERY_END===')
+          PY
+          python /tmp/ai_stock_discovery/discover.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-stock-link-discovery-v1
+          path: /tmp/ai_stock_discovery/discovery.json

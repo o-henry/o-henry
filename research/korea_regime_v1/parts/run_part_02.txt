@@ -1,0 +1,230 @@
+        return "neutral"
+
+    b["regime"] = b.apply(regime_row, axis=1)
+    p = p.merge(b[["market", "date", "regime"]], on=["market", "date"], how="left", suffixes=("", "_r"))
+    if "regime_r" in p.columns:
+        p["regime"] = p["regime_r"]
+        p = p.drop(columns=["regime_r"])
+
+    return p, b
+
+
+def candidate_scores(day: pd.DataFrame, cfg: Config) -> pd.DataFrame:
+    if day.empty:
+        return day
+    market = str(day["market"].iloc[0])
+    min_adv = 2_000_000_000 if market == "KOSPI" else 1_000_000_000
+
+    d = day.copy()
+    eligible = (
+        (d["history_n"] >= 120)
+        & (d["close"] >= 2000)
+        & (d["adv20"] >= min_adv)
+        & (d["max_abs_ret20"] <= 0.35)
+        & (d["vol20"].between(0.008, 0.12))
+        & d["ma20"].notna()
+        & d["ma60"].notna()
+    )
+    d = d[eligible].copy()
+    if d.empty:
+        return d
+
+    regime = str(d["regime"].iloc[0])
+    overheat_ok = d["dist_ma20_sigma"] <= cfg.overheat_sigma
+
+    if regime == "bull":
+        cond = (
+            (d["close"] > d["ma20"])
+            & (d["ma20"] >= d["ma60"] * 0.99)
+            & (d["ret20"] > 0.03)
+            & (d["rel20"] > 0.0)
+            & (d["ret3"].between(-0.07, 0.04))
+            & (d["drawdown20"].between(-0.12, -0.005))
+            & overheat_ok
+        )
+        d["score"] = (
+            0.28 * d["rank_rel20"]
+            + 0.20 * d["rank_rel60"]
+            + 0.16 * d["rank_ret20"]
+            + 0.12 * d["rank_ret60"]
+            + 0.10 * d["rank_volume_ratio"]
+            + 0.08 * d["rank_adv20"]
+            + 0.06 * d["rank_low_vol20"]
+        )
+    elif regime in {"transition", "neutral"}:
+        cond = (
+            (d["ret60"] > 0.0)
+            & (d["rel20"] > 0.0)
+            & (d["rank_rel20"] >= 0.75)
+            & (d["ret3"].between(-0.10, -0.005))
+            & (d["ret1"] > 0.0)
+            & (d["close"] >= d["ma10"] * 0.98)
+            & (d["volume_ratio"] >= 0.85)
+            & overheat_ok
+        )
+        d["score"] = (
+            0.30 * d["rank_rel20"]
+            + 0.18 * d["rank_rel60"]
+            + 0.16 * d["rank_ret60"]
+            + 0.14 * d["rank_volume_ratio"]
+            + 0.12 * d["rank_low_vol20"]
+            + 0.10 * (1.0 - (d["ret3"].abs() / 0.10).clip(0, 1))
+        )
+    else:
+        rs_cond = (
+            (d["ret20"] > 0.02)
+            & (d["rel20"] > 0.05)
+            & (d["rank_rel20"] >= 0.90)
+            & (d["close"] > d["ma20"])
+            & (d["ret5"] > -0.03)
+            & ((d["beta20"] <= 0.9) | (d["volume_ratio"] >= 1.5))
+            & overheat_ok
+        )
+        reversal_cond = (
+            cfg.include_panic_reversal
+            & (d["ret5"] <= -0.12)
+            & (d["ret1"] >= 0.035)
+            & (d["volume_ratio"] >= 1.5)
+            & (d["rel1"] > 0.02)
+            & (d["rank_adv20"] >= 0.70)
+        )
+        cond = rs_cond | reversal_cond
+        d["score"] = (
+            0.34 * d["rank_rel20"]
+            + 0.18 * d["rank_rel5"]
+            + 0.16 * d["rank_ret20"]
+            + 0.12 * d["rank_volume_ratio"]
+            + 0.10 * d["rank_low_vol20"]
+            + 0.10 * (1.0 - d["beta20"].clip(0, 2) / 2.0)
+        )
+        d.loc[reversal_cond, "score"] += 0.08
+
+    d = d[cond & d["score"].notna()].copy()
+    return d.sort_values(["score", "adv20"], ascending=[False, False])
+
+
+@dataclass
+class Position:
+    code: str
+    name: str
+    regime: str
+    signal_date: pd.Timestamp
+    entry_date: pd.Timestamp
+    entry_price: float
+    shares: float
+    invested: float
+    hold_days: int
+    stop_pct: float
+    target_pct: float
+    age: int = 0
+
+
+def sell_fee_for_date(date: pd.Timestamp, stress: float) -> float:
+    base = SELL_FEE_2026 if date >= pd.Timestamp("2026-01-01") else SELL_FEE_2025
+    return base * stress
+
+
+def simulate_market(
+    market: str,
+    cfg: Config,
+    features: pd.DataFrame,
+    benchmark: pd.DataFrame,
+    start: pd.Timestamp,
+    end: pd.Timestamp,
+    *,
+    stress: float = 1.0,
+) -> tuple[dict[str, Any], pd.DataFrame, pd.DataFrame]:
+    data = features[(features["market"] == market) & (features["date"].between(start, end))].copy()
+    if data.empty:
+        raise RuntimeError(f"No data for {market} {start} {end}")
+
+    dates = sorted(data["date"].unique())
+    by_date = {pd.Timestamp(d): x.copy() for d, x in data.groupby("date")}
+    close_map = {
+        (pd.Timestamp(r.date), str(r.code)): float(r.close)
+        for r in data[["date", "code", "close"]].itertuples(index=False)
+    }
+
+    b = benchmark[(benchmark["market"] == market) & (benchmark["date"].between(start, end))].copy()
+    b = b.set_index("date").reindex(dates).ffill().reset_index()
+    b["bench_daily_return"] = b["bench_close"].pct_change().fillna(0.0)
+
+    cash = INITIAL_CAPITAL
+    positions: list[Position] = []
+    pending: dict[pd.Timestamp, list[dict[str, Any]]] = {}
+    trades: list[dict[str, Any]] = []
+    equity_rows: list[dict[str, Any]] = []
+    prev_equity = INITIAL_CAPITAL
+
+    regime_params = {
+        "bull": (cfg.bull_hold, cfg.bull_exposure, -0.07, 0.14),
+        "transition": (cfg.transition_hold, cfg.transition_exposure, -0.055, 0.10),
+        "neutral": (cfg.transition_hold, cfg.transition_exposure, -0.055, 0.10),
+        "bear": (cfg.bear_hold, cfg.bear_exposure, -0.045, 0.08),
+        "panic": (1, min(cfg.bear_exposure, 0.20), -0.04, 0.07),
+        "unknown": (1, 0.0, -0.04, 0.07),
+    }
+
+    for i, date in enumerate(dates):
+        date = pd.Timestamp(date)
+        day = by_date[date]
+
+        scheduled = pending.pop(date, [])
+        active_codes = {p.code for p in positions}
+        for order in scheduled:
+            code = order["code"]
+            if code in active_codes:
+                continue
+            px = close_map.get((date, code))
+            if px is None or px <= 0:
+                continue
+            desired = order["notional"]
+            max_affordable = cash / (1.0 + BUY_FEE * stress)
+            notional = min(desired, max_affordable)
+            if notional < 100_000:
+                continue
+            buy_cost = notional * BUY_FEE * stress
+            shares = notional / px
+            cash -= notional + buy_cost
+            positions.append(
+                Position(
+                    code=code,
+                    name=order["name"],
+                    regime=order["regime"],
+                    signal_date=order["signal_date"],
+                    entry_date=date,
+                    entry_price=px,
+                    shares=shares,
+                    invested=notional,
+                    hold_days=order["hold_days"],
+                    stop_pct=order["stop_pct"],
+                    target_pct=order["target_pct"],
+                )
+            )
+            active_codes.add(code)
+
+        remaining: list[Position] = []
+        for pos in positions:
+            px = close_map.get((date, pos.code))
+            if px is None:
+                remaining.append(pos)
+                continue
+            if date > pos.entry_date:
+                pos.age += 1
+            gross_ret = px / pos.entry_price - 1.0
+            reason = None
+            if gross_ret <= pos.stop_pct:
+                reason = "close_stop"
+            elif gross_ret >= pos.target_pct:
+                reason = "close_target"
+            elif pos.age >= pos.hold_days:
+                reason = "time_exit"
+
+            if reason is None:
+                remaining.append(pos)
+            else:
+                proceeds_gross = pos.shares * px
+                sell_cost = proceeds_gross * sell_fee_for_date(date, stress)
+                proceeds = proceeds_gross - sell_cost
+                cash += proceeds
+                buy_cost = pos.invested * BUY_FEE * stress

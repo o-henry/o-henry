@@ -1,0 +1,61 @@
+name: KOSDAQ regime v2 locked final
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "research/korea_regime_v1/**"
+      - ".github/workflows/kosdaq-final-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  final:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pandas numpy yfinance huggingface_hub hf_xet pyarrow
+
+      - name: Reconstruct frozen rules and open final once
+        run: |
+          mkdir -p /tmp/kosdaq_final_v2 /tmp/korea_regime_v2
+          for f in research/korea_regime_v1/parts/run_part_*.txt; do
+            cat "$f"
+            printf '\n'
+          done > /tmp/kosdaq_final_v2/run_v1.py
+          cp /tmp/kosdaq_final_v2/run_v1.py /tmp/korea_regime_v2/run_v1.py
+          cp research/korea_regime_v1/v2.py /tmp/kosdaq_final_v2/v2.py
+          cp research/korea_regime_v1/v2.py /tmp/korea_regime_v2/v2.py
+          cp research/korea_regime_v1/kosdaq_final_v2.py /tmp/kosdaq_final_v2/final.py
+          python -m py_compile /tmp/kosdaq_final_v2/run_v1.py /tmp/kosdaq_final_v2/v2.py /tmp/kosdaq_final_v2/final.py
+          python /tmp/kosdaq_final_v2/final.py
+
+      - name: Print result
+        if: always()
+        run: |
+          if [ -f /tmp/kosdaq_final_v2/outputs/kosdaq_final_result.json ]; then
+            echo '===KOSDAQ_LOCKED_FINAL_BEGIN==='
+            cat /tmp/kosdaq_final_v2/outputs/kosdaq_final_result.json
+            echo '===KOSDAQ_LOCKED_FINAL_END==='
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kosdaq-regime-v2-locked-final
+          path: /tmp/kosdaq_final_v2/outputs
+          if-no-files-found: warn
