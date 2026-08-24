@@ -5,15 +5,16 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/krx-v5-long-ohlcv-ml.yml'
-      - 'research/krx_v5/**'
+      - 'research/krx_v6/**'
   workflow_dispatch:
 
 jobs:
   audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    env:
-      PYTHONUNBUFFERED: '1'
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,41 +23,76 @@ jobs:
       - name: Cache KRX source files
         uses: actions/cache@v4
         with:
-          path: /tmp/krx_v5_cache
-          key: krx-v5-csv-${{ runner.os }}-20260821-v1
+          path: /tmp/krx_v6_cache
+          key: krx-v6-csv-${{ runner.os }}-20260821-v2
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install 'numpy<2.3' 'pandas<3' 'scikit-learn<1.8' requests yfinance huggingface_hub hf_xet pyarrow finance-datareader
-      - name: Reconstruct and compile v6 pipeline
+      - name: Reconstruct and compile pipeline
         run: |
-          rm -rf /tmp/krx_v5
-          mkdir -p /tmp/krx_v5/outputs /tmp/krx_v5/cache /tmp/krx_v5_cache
+          rm -rf /tmp/krx_v6
+          mkdir -p /tmp/krx_v6/outputs /tmp/krx_v6/cache /tmp/krx_v6_cache
           cat \
-            research/krx_v5/part1.py \
-            research/krx_v5/part1b_cache.py \
-            research/krx_v5/part2.py \
-            research/krx_v5/part2c_v6_candidates.py \
-            research/krx_v5/part3.py \
-            research/krx_v5/part5a_v6_core.py \
-            research/krx_v5/part5b_v6_simulator.py \
-            research/krx_v5/part5c_v6_main.py \
-            > /tmp/krx_v5/pipeline_v6.py
-          python -m py_compile /tmp/krx_v5/pipeline_v6.py
-      - name: Run point-in-time audit
-        run: python /tmp/krx_v5/pipeline_v6.py
-      - name: Print final result
+            research/krx_v6/part1.py \
+            research/krx_v6/part1b_cache.py \
+            research/krx_v6/part2.py \
+            research/krx_v6/part2c_v6_candidates.py \
+            research/krx_v6/part5a_v6_core.py \
+            research/krx_v6/part5b_v6_simulator.py \
+            research/krx_v6/part5c_v6_main.py \
+            > /tmp/krx_v6/pipeline_v6.py
+          python -m py_compile /tmp/krx_v6/pipeline_v6.py
+      - name: Run audit and retain traceback
+        id: audit_run
+        shell: bash
+        run: |
+          set +e
+          python -u /tmp/krx_v6/pipeline_v6.py 2>&1 | tee /tmp/krx_v6/outputs/audit.log
+          code=${PIPESTATUS[0]}
+          echo "$code" > /tmp/krx_v6/outputs/process_exit_code.txt
+          if [ "$code" -ne 0 ]; then
+            python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path('/tmp/krx_v6/outputs')
+          log = (root / 'audit.log').read_text(encoding='utf-8', errors='replace') if (root / 'audit.log').exists() else ''
+          payload = {
+              'status': 'TECHNICAL_FAILURE',
+              'accepted': False,
+              'reason': 'pipeline_exception',
+              'traceback_tail': log[-30000:],
+          }
+          (root / 'technical_failure.json').write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+          PY
+          fi
+          exit 0
+      - name: Summarize outcome
         if: always()
         run: |
-          if [ -f /tmp/krx_v5/outputs/final_result.json ]; then
-            echo '===KRX_V6_RESULT_BEGIN==='
-            cat /tmp/krx_v5/outputs/final_result.json
-            echo '===KRX_V6_RESULT_END==='
+          echo '## KRX v6 audit' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f /tmp/krx_v6/outputs/final_result.json ]; then
+            python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          p=json.loads(Path('/tmp/krx_v6/outputs/final_result.json').read_text(encoding='utf-8'))
+          print(f"- status: {p.get('status')}")
+          print(f"- accepted: {p.get('accepted')}")
+          for key in ['validation_2025','stress_2026_01_08_21','stress_2026']:
+              if key in p:
+                  m=p[key].get('metrics',p[key])
+                  print(f"- {key}: return={m.get('return')}, PF={m.get('profit_factor')}, MDD={m.get('max_drawdown')}, trades={m.get('trades')}")
+          PY
+          elif [ -f /tmp/krx_v6/outputs/technical_failure.json ]; then
+            echo '- status: TECHNICAL_FAILURE' >> "$GITHUB_STEP_SUMMARY"
+            echo '- traceback saved in artifact' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '- status: NO_RESULT_FILE' >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: krx-v6-anchored-empirical-results
-          path: /tmp/krx_v5/outputs
-          if-no-files-found: warn
+          path: /tmp/krx_v6/outputs
+          if-no-files-found: error
           retention-days: 90
