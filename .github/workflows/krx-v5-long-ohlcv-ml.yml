@@ -5,7 +5,7 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/krx-v5-long-ohlcv-ml.yml'
-      - 'research/krx_v6/**'
+      - 'research/krx_v5/**'
   workflow_dispatch:
 
 jobs:
@@ -33,14 +33,21 @@ jobs:
         run: |
           rm -rf /tmp/krx_v6
           mkdir -p /tmp/krx_v6/outputs /tmp/krx_v6/cache /tmp/krx_v6_cache
+          test -f research/krx_v5/part1.py
+          test -f research/krx_v5/part1b_cache.py
+          test -f research/krx_v5/part2.py
+          test -f research/krx_v5/part2c_v6_candidates.py
+          test -f research/krx_v5/part5a_v6_core.py
+          test -f research/krx_v5/part5b_v6_simulator.py
+          test -f research/krx_v5/part5c_v6_main.py
           cat \
-            research/krx_v6/part1.py \
-            research/krx_v6/part1b_cache.py \
-            research/krx_v6/part2.py \
-            research/krx_v6/part2c_v6_candidates.py \
-            research/krx_v6/part5a_v6_core.py \
-            research/krx_v6/part5b_v6_simulator.py \
-            research/krx_v6/part5c_v6_main.py \
+            research/krx_v5/part1.py \
+            research/krx_v5/part1b_cache.py \
+            research/krx_v5/part2.py \
+            research/krx_v5/part2c_v6_candidates.py \
+            research/krx_v5/part5a_v6_core.py \
+            research/krx_v5/part5b_v6_simulator.py \
+            research/krx_v5/part5c_v6_main.py \
             > /tmp/krx_v6/pipeline_v6.py
           python -m py_compile /tmp/krx_v6/pipeline_v6.py
       - name: Run audit and retain traceback
