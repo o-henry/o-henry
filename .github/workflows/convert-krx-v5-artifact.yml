@@ -1,0 +1,83 @@
+name: Convert KRX v5 candidate artifact
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/convert-krx-v5-artifact.yml'
+  workflow_dispatch:
+
+jobs:
+  convert:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: python -m pip install 'pandas<3' pyarrow
+      - name: Download prior artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/krx_v5_convert/source /tmp/krx_v5_convert/output
+          curl --fail --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/o-henry/o-henry/actions/artifacts/9506163991/zip" \
+            --output /tmp/krx_v5_convert/source.zip
+          unzip -o /tmp/krx_v5_convert/source.zip -d /tmp/krx_v5_convert/source
+      - name: Convert and summarize
+        run: |
+          cat > /tmp/krx_v5_convert/convert.py <<'PY'
+          import json
+          from pathlib import Path
+          import pandas as pd
+          root=Path('/tmp/krx_v5_convert')
+          p=next((root/'source').rglob('candidate_audit.parquet'))
+          df=pd.read_parquet(p)
+          df['date']=pd.to_datetime(df['date'])
+          df['year']=df['date'].dt.year
+          df['month']=df['date'].dt.to_period('M').astype(str)
+          df['win']=(df['net_return']>0).astype(int)
+          df.to_csv(root/'output'/'candidate_audit.csv.gz',index=False,compression='gzip',encoding='utf-8-sig')
+          keys=[['year'],['year','market'],['year','pattern'],['year','regime'],['year','market','pattern'],['year','pattern','regime']]
+          frames=[]
+          for group_cols in keys:
+              g=df.groupby(group_cols,dropna=False).agg(
+                  rows=('net_return','size'),
+                  mean_return=('net_return','mean'),
+                  median_return=('net_return','median'),
+                  win_rate=('win','mean'),
+                  mean_mae=('mae','mean'),
+                  mean_mfe=('mfe','mean'),
+                  total_return_sum=('net_return','sum'),
+              ).reset_index()
+              g.insert(0,'grouping','|'.join(group_cols))
+              for c in ['year','market','pattern','regime']:
+                  if c not in g.columns: g[c]='ALL'
+              frames.append(g[['grouping','year','market','pattern','regime','rows','mean_return','median_return','win_rate','mean_mae','mean_mfe','total_return_sum']])
+          stats=pd.concat(frames,ignore_index=True)
+          stats.to_csv(root/'output'/'candidate_group_stats.csv',index=False,encoding='utf-8-sig')
+          monthly=df.groupby(['month','market','pattern'],dropna=False).agg(rows=('net_return','size'),mean_return=('net_return','mean'),win_rate=('win','mean')).reset_index()
+          monthly.to_csv(root/'output'/'candidate_monthly_stats.csv',index=False,encoding='utf-8-sig')
+          summary={
+              'rows':len(df), 'start':str(df.date.min().date()), 'end':str(df.date.max().date()),
+              'overall':{'mean':float(df.net_return.mean()),'median':float(df.net_return.median()),'win_rate':float(df.win.mean())},
+              'top_groups':stats[stats.rows>=20].sort_values('mean_return',ascending=False).head(100).to_dict('records'),
+              'bottom_groups':stats[stats.rows>=20].sort_values('mean_return').head(100).to_dict('records'),
+          }
+          (root/'output'/'candidate_summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
+          print(json.dumps(summary,ensure_ascii=False,indent=2,default=str)[:100000])
+          PY
+          python /tmp/krx_v5_convert/convert.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: krx-v5-candidate-diagnostics
+          path: /tmp/krx_v5_convert/output
+          retention-days: 30
