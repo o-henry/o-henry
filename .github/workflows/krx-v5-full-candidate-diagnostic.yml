@@ -1,0 +1,70 @@
+name: KRX v5 full candidate diagnostic
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/krx-v5-full-candidate-diagnostic.yml'
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Restore KRX source cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/krx_v5_cache
+          key: krx-v5-csv-${{ runner.os }}-20260821-v1
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'numpy<2.3' 'pandas<3' requests yfinance huggingface_hub hf_xet pyarrow finance-datareader
+      - name: Build diagnostic
+        run: |
+          rm -rf /tmp/krx_v5_diag
+          mkdir -p /tmp/krx_v5_diag/outputs /tmp/krx_v5/cache
+          cat research/krx_v5/part1.py research/krx_v5/part1b_cache.py research/krx_v5/part2.py > /tmp/krx_v5_diag/full_candidates.py
+          cat >> /tmp/krx_v5_diag/full_candidates.py <<'PY'
+          def diagnostic_main():
+              print('download panel')
+              raw, dq = download_panel()
+              panel, aq = adjust_splits(raw)
+              print('features')
+              benchmarks = download_benchmarks(panel['date'].min(), panel['date'].max())
+              features, bench = build_features(panel, benchmarks)
+              candidates = generate_candidates(features)
+              candidates['year'] = candidates['date'].dt.year
+              candidates['month'] = candidates['date'].dt.to_period('M').astype(str)
+              candidates['win'] = (candidates['net_return'] > 0).astype(int)
+              out = Path('/tmp/krx_v5_diag/outputs')
+              candidates.to_csv(out/'full_candidates.csv.gz', index=False, compression='gzip', encoding='utf-8-sig')
+              candidates.to_parquet(out/'full_candidates.parquet', index=False)
+              panel_stats = {
+                  'download': dq, 'adjustment': aq, 'candidate_rows': len(candidates),
+                  'columns': list(candidates.columns),
+                  'start': str(candidates['date'].min().date()), 'end': str(candidates['date'].max().date()),
+                  'group_stats': candidates.groupby(['year','market','pattern','regime']).agg(
+                      rows=('net_return','size'), mean_return=('net_return','mean'),
+                      win_rate=('win','mean'), mean_mae=('mae','mean'), mean_mfe=('mfe','mean')
+                  ).reset_index().to_dict('records'),
+              }
+              (out/'diagnostic.json').write_text(json.dumps(panel_stats, ensure_ascii=False, indent=2, default=str), encoding='utf-8')
+              print(json.dumps(panel_stats, ensure_ascii=False, indent=2, default=str)[:100000])
+          if __name__ == '__main__':
+              diagnostic_main()
+          PY
+          python -m py_compile /tmp/krx_v5_diag/full_candidates.py
+      - name: Run diagnostic
+        run: python /tmp/krx_v5_diag/full_candidates.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: krx-v5-full-candidate-features
+          path: /tmp/krx_v5_diag/outputs
+          retention-days: 30
